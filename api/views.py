@@ -7,7 +7,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Post, Comment, User
 from .serializers import UserSerializer, PostSerializer, CommentSerializer
 from rest_framework.decorators import action
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from django.http import HttpResponse, Http404
+from django.conf import settings
+import os
+from rest_framework.decorators import api_view, permission_classes
 
 User = get_user_model()
 
@@ -15,7 +19,7 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
     serializer_class = UserSerializer
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -108,7 +112,7 @@ class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -130,15 +134,43 @@ class PostViewSet(viewsets.ModelViewSet):
             'likes_count': post.likes.count()
         })
 
+    def perform_update(self, serializer):
+        # Ensure user can only update their own posts
+        if serializer.instance.user != self.request.user:
+            return Response({'error': 'You can only update your own posts'}, status=403)
+        serializer.save()
+
     @action(detail=True, methods=['patch'])
     def upload_picture(self, request, pk=None):
         post = self.get_object()
+        # Check if user owns the post
+        if post.user != request.user:
+            return Response({'error': 'You can only update your own posts'}, status=403)
+            
         if 'picture' in request.FILES:
             post.picture = request.FILES['picture']
             post.save()
             serializer = PostSerializer(post)
             return Response(serializer.data)
         return Response({'error': 'No picture provided'}, status=400)
+
+    @action(detail=True, methods=['patch'])
+    def update_post(self, request, pk=None):
+        post = self.get_object()
+        # Check if user owns the post
+        if post.user != request.user:
+            return Response({'error': 'You can only update your own posts'}, status=403)
+            
+        # Update description and/or picture
+        if 'description' in request.data:
+            post.description = request.data['description']
+        
+        if 'picture' in request.FILES:
+            post.picture = request.FILES['picture']
+        
+        post.save()
+        serializer = PostSerializer(post)
+        return Response(serializer.data)
 
 class CommentListView(generics.ListCreateAPIView):
     queryset = Comment.objects.all()
@@ -158,6 +190,7 @@ class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def perform_create(self, serializer):
         post = Post.objects.get(id=self.request.data.get('post_id'))
@@ -179,3 +212,13 @@ class CommentViewSet(viewsets.ModelViewSet):
             'liked': liked,
             'likes_count': comment.likes.count()
         })
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def serve_image(request, path):
+    file_path = os.path.join(settings.MEDIA_ROOT, path)
+    if not os.path.exists(file_path):
+        raise Http404("Image not found")
+
+    with open(file_path, 'rb') as f:
+        return HttpResponse(f.read(), content_type="image/jpeg")

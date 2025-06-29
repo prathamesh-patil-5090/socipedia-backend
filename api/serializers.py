@@ -9,9 +9,13 @@ class UserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password')
+        friends = validated_data.pop('friends', [])  # Remove friends from validated_data
         user = User(**validated_data)
         user.set_password(password)
         user.save()
+        # Set friends after saving the user
+        if friends:
+            user.friends.set(friends)
         return user
 
 class CommentSerializer(serializers.ModelSerializer):
