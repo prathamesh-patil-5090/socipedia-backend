@@ -138,10 +138,14 @@ ALLOWED_HOSTS=your-app-name.onrender.com
 ## 🚨 Troubleshooting
 
 ### Common Issues:
-1. **Build fails**: Check build.sh permissions and requirements.txt
-2. **Database errors**: Ensure migrations are included
-3. **Static files**: Whitenoise is configured in settings.py
-4. **Image uploads**: Check MEDIA settings and file permissions
+1. **Build fails with "No module named 'api.image_utils'"**: ✅ FIXED
+   - This was resolved by updating migration file 0004
+   - Image compression still works via model save() method
+   
+2. **Build fails**: Check build.sh permissions and requirements.txt
+3. **Database errors**: Ensure migrations are included
+4. **Static files**: Whitenoise is configured in settings.py
+5. **Image uploads**: Check MEDIA settings and file permissions
 
 ### Logs Location:
 - Build logs: Render dashboard → Service → Events
