@@ -7,6 +7,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Post, Comment, User
 from .serializers import UserSerializer, PostSerializer, CommentSerializer
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser
 
 User = get_user_model()
 
@@ -14,6 +15,23 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
     serializer_class = UserSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        # Generate random profile stats like in Express version
+        import random
+        user.viewed_profile = random.randint(0, 10000)
+        user.impressions = random.randint(0, 10000)
+        user.save()
+        
+        return Response({
+            'user': UserSerializer(user).data,
+            'message': 'Registration successful'
+        }, status=status.HTTP_201_CREATED)
 
 class LoginView(generics.GenericAPIView):
     permission_classes = (AllowAny,)
@@ -38,6 +56,17 @@ class UserDetailView(generics.RetrieveAPIView):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
+    @action(detail=True, methods=['patch'])
+    def upload_picture(self, request, pk=None):
+        user = self.get_object()
+        if 'picture' in request.FILES:
+            user.picture = request.FILES['picture']
+            user.save()
+            serializer = UserSerializer(user)
+            return Response(serializer.data)
+        return Response({'error': 'No picture provided'}, status=400)
 
     @action(detail=True, methods=['get'])
     def comments(self, request, pk=None):
@@ -79,6 +108,7 @@ class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -99,6 +129,16 @@ class PostViewSet(viewsets.ModelViewSet):
             'liked': liked,
             'likes_count': post.likes.count()
         })
+
+    @action(detail=True, methods=['patch'])
+    def upload_picture(self, request, pk=None):
+        post = self.get_object()
+        if 'picture' in request.FILES:
+            post.picture = request.FILES['picture']
+            post.save()
+            serializer = PostSerializer(post)
+            return Response(serializer.data)
+        return Response({'error': 'No picture provided'}, status=400)
 
 class CommentListView(generics.ListCreateAPIView):
     queryset = Comment.objects.all()

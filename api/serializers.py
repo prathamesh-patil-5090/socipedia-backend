@@ -4,7 +4,7 @@ from .models import User, Post, Comment
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "first_name", "last_name", "email", "username", "password", "picture_path", "friends", "location", "occupation", "viewed_profile", "impressions"]
+        fields = ["id", "first_name", "last_name", "email", "username", "password", "picture", "picture_path", "friends", "location", "occupation", "viewed_profile", "impressions"]
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
@@ -28,4 +28,4 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ["id", "user", "description", "picture_path", "likes", "comments", "created_at", "updated_at"]
+        fields = ["id", "user", "description", "picture", "picture_path", "likes", "comments", "created_at", "updated_at"]
