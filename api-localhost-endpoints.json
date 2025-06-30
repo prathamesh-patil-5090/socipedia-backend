@@ -13,12 +13,15 @@
   },
   "Users": {
     "Get Users": "curl -X GET http://localhost:8000/api/users/ -H \"Authorization: Bearer <your_access_token>\"",
-    "Get User": "curl -X GET http://localhost:8000/api/users/1/ -H \"Authorization: Bearer <your_access_token>\"",
-    "Update User": "curl -X PATCH http://localhost:8000/api/users/1/ -H \"Authorization: Bearer <your_access_token>\" -H \"Content-Type: application/json\" -d '{\"first_name\": \"Updated\", \"location\": \"New Location\"}'",
-    "Get User Comments": "curl -X GET http://localhost:8000/api/users/1/comments/ -H \"Authorization: Bearer <your_access_token>\"",
-    "Upload Profile Picture": "curl -X PATCH http://localhost:8000/api/users/1/upload_picture/ -H \"Authorization: Bearer <your_access_token>\" -F \"picture=@/path/to/your/image.jpg\" # Auto-compressed to 800x800px@85%",
-    "Add Friend": "curl -X POST http://localhost:8000/api/users/1/add_friend/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\" -d '{\"friend_id\": 2}'",
-    "Remove Friend": "curl -X POST http://localhost:8000/api/users/1/remove_friend/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\" -d '{\"friend_id\": 2}'"
+    "Get User": "curl -X GET http://localhost:8000/api/users/4/ -H \"Authorization: Bearer <your_access_token>\"",
+    "Update User (Basic Fields)": "curl -X PATCH http://localhost:8000/api/users/4/ -H \"Authorization: Bearer <your_access_token>\" -H \"Content-Type: application/json\" -d '{\"first_name\": \"Updated\", \"location\": \"New Location\"}'",
+    "Update User (All Text Fields)": "curl -X PATCH http://localhost:8000/api/users/4/ -H \"Authorization: Bearer <your_access_token>\" -H \"Content-Type: application/json\" -d '{\"first_name\": \"Updated\", \"last_name\": \"NewLastName\", \"email\": \"newemail@example.com\", \"username\": \"newusername\", \"location\": \"New Location\", \"occupation\": \"Developer\"}'",
+    "Update User with Picture": "curl -X PATCH http://localhost:8000/api/users/4/ -H \"Authorization: Bearer <your_access_token>\" -F \"first_name=Updated\" -F \"location=New Location\" -F \"picture=@/path/to/your/image.jpg\" # Image auto-compressed to 800x800px@85%",
+    "Update User Friends": "curl -X PATCH http://localhost:8000/api/users/4/ -H \"Authorization: Bearer <your_access_token>\" -H \"Content-Type: application/json\" -d '{\"friends\": [1, 2, 3]}'",
+    "Get User Comments": "curl -X GET http://localhost:8000/api/users/4/comments/ -H \"Authorization: Bearer <your_access_token>\"",
+    "Upload Profile Picture": "curl -X PATCH http://localhost:8000/api/users/4/upload_picture/ -H \"Authorization: Bearer <your_access_token>\" -F \"picture=@/path/to/your/image.jpg\" # Auto-compressed to 800x800px@85%",
+    "Add Friend": "curl -X POST http://localhost:8000/api/users/4/add_friend/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\" -d '{\"friend_id\": 2}'",
+    "Remove Friend": "curl -X POST http://localhost:8000/api/users/4/remove_friend/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\" -d '{\"friend_id\": 2}'"
   },
   "Posts": {
     "Get Posts": "curl -X GET http://localhost:8000/api/posts/ -H \"Authorization: Bearer <your_access_token>\"",

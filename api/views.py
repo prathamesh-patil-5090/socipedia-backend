@@ -60,7 +60,8 @@ class UserDetailView(generics.RetrieveAPIView):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @action(detail=True, methods=['patch'])
     def upload_picture(self, request, pk=None):
