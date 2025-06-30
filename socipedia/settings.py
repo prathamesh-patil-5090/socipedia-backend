@@ -143,6 +143,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
     "https://banao-jo4i.onrender.com",
+    "https://sociopedia-frontend-e1y3.onrender.com"
 ]
 
 # Allow all origins in development/testing
