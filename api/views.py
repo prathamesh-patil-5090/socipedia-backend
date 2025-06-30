@@ -41,12 +41,25 @@ class LoginView(generics.GenericAPIView):
     permission_classes = (AllowAny,)
 
     def post(self, request, *args, **kwargs):
-        username = request.data.get("username")
+        username_or_email = request.data.get("username")
         password = request.data.get("password")
-        user = authenticate(username=username, password=password)
+        
+        # Try to authenticate with username first
+        user = authenticate(username=username_or_email, password=password)
+        
+        # If authentication failed and input looks like email, try email authentication
+        if not user and '@' in username_or_email:
+            try:
+                user_obj = User.objects.get(email=username_or_email)
+                user = authenticate(username=user_obj.username, password=password)
+            except User.DoesNotExist:
+                pass
+        
         if user:
             refresh = RefreshToken.for_user(user)
             return Response({
+                'user': UserSerializer(user).data,
+                'token': str(refresh.access_token),
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
             })
@@ -97,9 +110,15 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response({'status': 'friend removed'})
 
 class PostListView(generics.ListCreateAPIView):
-    queryset = Post.objects.all()
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Post.objects.all().order_by('-created_at')
+        user_id = self.request.query_params.get('user', None)
+        if user_id is not None:
+            queryset = queryset.filter(user__id=user_id)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -110,10 +129,16 @@ class PostDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
 class PostViewSet(viewsets.ModelViewSet):
-    queryset = Post.objects.all()
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        queryset = Post.objects.all().order_by('-created_at')
+        user_id = self.request.query_params.get('user', None)
+        if user_id is not None:
+            queryset = queryset.filter(user__id=user_id)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
