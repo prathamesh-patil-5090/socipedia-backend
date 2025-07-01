@@ -79,8 +79,6 @@ class User(AbstractUser):
     picture = models.ImageField(upload_to=user_profile_path, blank=True, null=True)
     picture_path = models.CharField(max_length=255, blank=True, default="")  # Keep for compatibility
     friends = models.ManyToManyField("self", blank=True)
-    location = models.CharField(max_length=100, blank=True)
-    occupation = models.CharField(max_length=100, blank=True)
     viewed_profile = models.IntegerField(default=0)
     impressions = models.IntegerField(default=0)
 

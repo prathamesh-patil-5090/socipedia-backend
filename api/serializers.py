@@ -10,7 +10,7 @@ class SimpleUserSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ["_id", "id", "firstName", "lastName", "picturePath", "location", "occupation"]
+        fields = ["_id", "id", "firstName", "lastName", "picturePath"]
 
 class UserSerializer(serializers.ModelSerializer):
     # Map Django fields to frontend expected fields
@@ -23,7 +23,7 @@ class UserSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ["_id", "id", "firstName", "lastName", "first_name", "last_name", "email", "username", "password", "picture", "picturePath", "picture_path", "friends", "location", "occupation", "viewedProfile", "viewed_profile", "impressions"]
+        fields = ["_id", "id", "firstName", "lastName", "first_name", "last_name", "email", "username", "password", "picture", "picturePath", "picture_path", "friends", "viewedProfile", "viewed_profile", "impressions"]
         extra_kwargs = {'password': {'write_only': True}}
 
     def get_friends(self, obj):
@@ -36,8 +36,6 @@ class UserSerializer(serializers.ModelSerializer):
                 'firstName': friend.first_name,
                 'lastName': friend.last_name,
                 'picturePath': friend.picture_path or "",
-                'location': friend.location or "",
-                'occupation': friend.occupation or "",
             })
         return friends_data
 
@@ -105,7 +103,6 @@ class PostSerializer(serializers.ModelSerializer):
         # Use the actual picture filename from the uploaded file
         data['picturePath'] = instance.picture.name if instance.picture else ""
         data['userPicturePath'] = instance.user.picture.name if instance.user.picture else ""
-        data['location'] = ""  # Don't show user location in posts
         data['createdAt'] = instance.created_at.isoformat()
         data['updatedAt'] = instance.updated_at.isoformat()
         
