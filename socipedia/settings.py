@@ -142,7 +142,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
-    "https://sociopedia-frontend-e1y3.onrender.com"
+    "https://sociopedia-frontend-8u0l.onrender.com"
 ]
 
 # Allow all origins in development/testing
