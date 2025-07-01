@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from django.contrib.auth import get_user_model, authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Post, Comment, User
@@ -73,7 +73,7 @@ class UserDetailView(generics.RetrieveAPIView):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @action(detail=True, methods=['patch'])
@@ -95,6 +95,9 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def add_friend(self, request, pk=None):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required to add friends'}, status=401)
+            
         user = self.get_object()
         friend_id = request.data.get('friend_id')
         friend = User.objects.get(id=friend_id)
@@ -103,6 +106,9 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def remove_friend(self, request, pk=None):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required to remove friends'}, status=401)
+            
         user = self.get_object()
         friend_id = request.data.get('friend_id')
         friend = User.objects.get(id=friend_id)
@@ -111,7 +117,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class PostListView(generics.ListCreateAPIView):
     serializer_class = PostSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
         queryset = Post.objects.all().order_by('-created_at')
@@ -126,11 +132,11 @@ class PostListView(generics.ListCreateAPIView):
 class PostDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
 class PostViewSet(viewsets.ModelViewSet):
     serializer_class = PostSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
@@ -145,6 +151,9 @@ class PostViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def like(self, request, pk=None):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required to like posts'}, status=401)
+            
         post = self.get_object()
         user = request.user
         
@@ -201,7 +210,7 @@ class PostViewSet(viewsets.ModelViewSet):
 class CommentListView(generics.ListCreateAPIView):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def perform_create(self, serializer):
         post = Post.objects.get(id=self.kwargs['post_id'])
@@ -210,12 +219,12 @@ class CommentListView(generics.ListCreateAPIView):
 class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def perform_create(self, serializer):
@@ -224,6 +233,9 @@ class CommentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def like(self, request, pk=None):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required to like comments'}, status=401)
+            
         comment = self.get_object()
         user = request.user
         
