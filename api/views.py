@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model, authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Post, Comment, User
 from .serializers import UserSerializer, PostSerializer, CommentSerializer
+from .pagination import PostsPagination
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.http import HttpResponse, Http404
@@ -118,6 +119,7 @@ class UserViewSet(viewsets.ModelViewSet):
 class PostListView(generics.ListCreateAPIView):
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
+    pagination_class = PostsPagination
 
     def get_queryset(self):
         queryset = Post.objects.all().order_by('-created_at')
@@ -138,6 +140,7 @@ class PostViewSet(viewsets.ModelViewSet):
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
+    pagination_class = PostsPagination
 
     def get_queryset(self):
         queryset = Post.objects.all().order_by('-created_at')
