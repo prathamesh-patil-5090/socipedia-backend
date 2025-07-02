@@ -22,7 +22,6 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-import auth0_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -30,10 +29,6 @@ urlpatterns = [
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
-    # Auth0 routes
-    path("", auth0_views.index, name="index"),
-    path("login", auth0_views.login, name="auth0_login"),
-    path("logout", auth0_views.logout, name="auth0_logout"),
-    path("callback", auth0_views.callback, name="auth0_callback"),
-    path("api/auth0/token-exchange", auth0_views.auth0_token_exchange, name="auth0_token_exchange"),
+    # OAuth2 provider URLs
+    path('o/', include('oauth2_provider.urls', namespace='oauth2_provider')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

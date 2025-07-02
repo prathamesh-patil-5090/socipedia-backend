@@ -81,6 +81,8 @@ class User(AbstractUser):
     friends = models.ManyToManyField("self", blank=True)
     viewed_profile = models.IntegerField(default=0)
     impressions = models.IntegerField(default=0)
+    google_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    auth0_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
