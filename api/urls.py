@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, PostViewSet, CommentViewSet, RegisterView, LoginView, serve_image, google_oauth_callback, auth0_sync
+from .views import UserViewSet, PostViewSet, CommentViewSet, RegisterView, LoginView, serve_image, google_oauth_callback, auth0_sync, post_comments
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -13,5 +13,6 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('auth/google/callback/', google_oauth_callback, name='google_oauth_callback'),
     path('auth/auth0/sync/', auth0_sync, name='auth0_sync'),
+    path('posts/<int:post_id>/comments/', post_comments, name='post_comments'),
     path('images/<path:path>', serve_image, name='serve_image'),
 ]
