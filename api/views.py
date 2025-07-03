@@ -206,16 +206,36 @@ class PostViewSet(viewsets.ModelViewSet):
             
             # Create notification for post owner (if not liking own post)
             if post.user != user:
-                notification = Notification.objects.create(
-                    user=post.user,
-                    type=Notification.POST_LIKE,
-                    message=f"{user.first_name} {user.last_name} liked your post",
-                    post=post,
-                    from_user=user
-                )
+                # Check if there's already a recent like notification from this user for this post
+                from django.utils import timezone
+                from datetime import timedelta
                 
-                # Send real-time notification via WebSocket
-                send_notification_websocket(post.user.id, notification)
+                existing_notification = Notification.objects.filter(
+                    user=post.user,
+                    from_user=user,
+                    type=Notification.POST_LIKE,
+                    post=post,
+                    created_at__gte=timezone.now() - timedelta(hours=1)  # Check for notifications in the last hour
+                ).first()
+                
+                if not existing_notification:
+                    notification = Notification.objects.create(
+                        user=post.user,
+                        type=Notification.POST_LIKE,
+                        message=f"{user.first_name} {user.last_name} liked your post",
+                        post=post,
+                        from_user=user
+                    )
+                    
+                    # Send real-time notification via WebSocket
+                    send_notification_websocket(post.user.id, notification)
+                else:
+                    # Update the existing notification timestamp without creating a new one
+                    existing_notification.created_at = timezone.now()
+                    existing_notification.is_read = False  # Mark as unread
+                    existing_notification.save()
+                    
+                    # Don't send WebSocket message for updated notifications to avoid duplicates
             
         return Response({
             'liked': liked,
