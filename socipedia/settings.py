@@ -41,6 +41,7 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*']  # Allow localhost for developme
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -50,6 +51,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "oauth2_provider",
+    "channels",
     "api",
 ]
 
@@ -84,6 +86,30 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'socipedia.wsgi.application'
+ASGI_APPLICATION = 'socipedia.asgi.application'
+
+# Channels configuration
+# Priority: Redis (if available) > PostgreSQL (if available) > In-Memory (fallback)
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [os.environ.get('REDIS_URL', 'redis://localhost:6379')],
+        },
+    } if os.environ.get('REDIS_URL') else {
+        'BACKEND': 'channels_postgres.core.PostgresChannelLayer',
+        'CONFIG': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'postgres'),
+            'USER': os.environ.get('DB_USER', 'postgres'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        },
+    } if os.environ.get('DATABASE_URL') and 'postgres' in os.environ.get('DATABASE_URL', '') else {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 
 # Database

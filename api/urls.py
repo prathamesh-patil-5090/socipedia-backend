@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     UserViewSet, PostViewSet, CommentViewSet, RegisterView, LoginView, 
     serve_image, google_oauth_callback, auth0_sync, post_comments,
-    send_friend_request, respond_friend_request, remove_friend,
+    send_friend_request, respond_friend_request, remove_friend, cancel_friend_request,
     get_notifications, mark_notification_read, get_friend_requests, get_friend_status,
     get_user_friends, clear_all_notifications, search_posts, search_users
 )
@@ -32,6 +32,7 @@ urlpatterns = [
     # Friend request endpoints
     path('friend-request/send/<int:user_id>/', send_friend_request, name='send_friend_request'),
     path('friend-request/respond/<int:request_id>/', respond_friend_request, name='respond_friend_request'),
+    path('friend-request/cancel/<int:request_id>/', cancel_friend_request, name='cancel_friend_request'),
     path('friend/remove/<int:user_id>/', remove_friend, name='remove_friend'),
     path('friend-requests/', get_friend_requests, name='get_friend_requests'),
     path('friend-status/<int:user_id>/', get_friend_status, name='get_friend_status'),

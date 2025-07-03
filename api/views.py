@@ -21,6 +21,35 @@ from urllib.parse import urlencode
 import secrets
 import string
 from django.db.models import Q
+from .websocket_utils import send_notification_websocket
+
+# Helper function to invalidate friend request notifications
+def invalidate_friend_request_notifications(friend_request_id):
+    """
+    Mark friend request notifications as invalid and notify users via WebSocket
+    """
+    try:
+        # Find all notifications related to this friend request
+        notifications = Notification.objects.filter(
+            friend_request_id=friend_request_id,
+            type=Notification.FRIEND_REQUEST,
+            is_read=False
+        )
+        
+        for notification in notifications:
+            # Send WebSocket message to notify that the friend request is invalid
+            send_notification_websocket(notification.user.id, {
+                'type': 'friend_request_invalid',
+                'notification_id': notification.id,
+                'message': 'Friend request is no longer available'
+            })
+            
+            # Mark notification as read (or delete it)
+            notification.is_read = True
+            notification.save()
+            
+    except Exception as e:
+        print(f"Error invalidating friend request notifications: {e}")
 
 User = get_user_model()
 
@@ -175,6 +204,19 @@ class PostViewSet(viewsets.ModelViewSet):
             post.likes.add(user)
             liked = True
             
+            # Create notification for post owner (if not liking own post)
+            if post.user != user:
+                notification = Notification.objects.create(
+                    user=post.user,
+                    type=Notification.POST_LIKE,
+                    message=f"{user.first_name} {user.last_name} liked your post",
+                    post=post,
+                    from_user=user
+                )
+                
+                # Send real-time notification via WebSocket
+                send_notification_websocket(post.user.id, notification)
+            
         return Response({
             'liked': liked,
             'likes_count': post.likes.count()
@@ -240,7 +282,20 @@ class CommentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         post = Post.objects.get(id=self.request.data.get('post_id'))
-        serializer.save(user=self.request.user, post=post)
+        comment = serializer.save(user=self.request.user, post=post)
+        
+        # Create notification for post owner (if not commenting on own post)
+        if post.user != self.request.user:
+            notification = Notification.objects.create(
+                user=post.user,
+                type=Notification.POST_COMMENT,
+                message=f"{self.request.user.first_name} {self.request.user.last_name} commented on your post",
+                post=post,
+                from_user=self.request.user
+            )
+            
+            # Send real-time notification via WebSocket
+            send_notification_websocket(post.user.id, notification)
 
     @action(detail=True, methods=['post'])
     def like(self, request, pk=None):
@@ -537,13 +592,16 @@ def send_friend_request(request, user_id):
             )
         
         # Create notification for receiver
-        Notification.objects.create(
+        notification = Notification.objects.create(
             user=receiver,
             type=Notification.FRIEND_REQUEST,
             message=f"{sender.first_name} {sender.last_name} sent you a friend request",
             friend_request=existing_request,
             from_user=sender
         )
+        
+        # Send real-time notification via WebSocket
+        send_notification_websocket(receiver.id, notification)
         
         return Response({
             'message': 'Friend request sent successfully',
@@ -592,12 +650,15 @@ def respond_friend_request(request, request_id):
             ).update(is_read=True)
             
             # Create notification for sender
-            Notification.objects.create(
+            notification = Notification.objects.create(
                 user=friend_request.sender,
                 type=Notification.FRIEND_ACCEPTED,
                 message=f"{friend_request.receiver.first_name} {friend_request.receiver.last_name} accepted your friend request",
                 from_user=friend_request.receiver
             )
+            
+            # Send real-time notification via WebSocket
+            send_notification_websocket(friend_request.sender.id, notification)
             
             # Get updated friends list for the user who accepted the request
             friends = request.user.friends.all()
@@ -628,6 +689,9 @@ def respond_friend_request(request, request_id):
             friend_request.status = FriendRequest.DECLINED
             friend_request.save()
             
+            # Invalidate any related notifications for other users
+            invalidate_friend_request_notifications(friend_request.id)
+            
             # Mark related notification as read
             Notification.objects.filter(
                 friend_request=friend_request,
@@ -641,7 +705,32 @@ def respond_friend_request(request, request_id):
             }, status=status.HTTP_200_OK)
             
     except FriendRequest.DoesNotExist:
-        return Response({'error': 'Friend request not found'}, status=status.HTTP_404_NOT_FOUND)
+        # Friend request was deleted or doesn't exist
+        # Invalidate any related notifications
+        try:
+            # Find notifications that reference this request_id
+            notifications = Notification.objects.filter(
+                friend_request_id=request_id,
+                type=Notification.FRIEND_REQUEST,
+                is_read=False
+            )
+            
+            for notification in notifications:
+                # Send WebSocket message to notify that the friend request is invalid
+                send_notification_websocket(notification.user.id, {
+                    'type': 'friend_request_invalid',
+                    'notification_id': notification.id,
+                    'message': 'Friend request is no longer available'
+                })
+                
+                # Mark notification as read
+                notification.is_read = True
+                notification.save()
+                
+        except Exception as e:
+            print(f"Error handling deleted friend request notifications: {e}")
+            
+        return Response({'error': 'Friend request not found or already deleted'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -940,3 +1029,34 @@ def search_users(request):
         return Response({'users': users_data}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({'error': str(e), 'users': []}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def cancel_friend_request(request, request_id):
+    """
+    Cancel a friend request that was sent by the current user
+    """
+    try:
+        friend_request = FriendRequest.objects.get(id=request_id, sender=request.user)
+        
+        if friend_request.status != FriendRequest.PENDING:
+            return Response({
+                'error': 'Friend request already processed',
+                'status': friend_request.status,
+                'message': f'This friend request has already been {friend_request.status.lower()}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Invalidate any related notifications for other users
+        invalidate_friend_request_notifications(friend_request.id)
+        
+        # Delete the friend request
+        friend_request.delete()
+        
+        return Response({
+            'message': 'Friend request cancelled successfully'
+        }, status=status.HTTP_200_OK)
+        
+    except FriendRequest.DoesNotExist:
+        return Response({'error': 'Friend request not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
