@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Post, Comment
+from .models import User, Post, Comment, FriendRequest, Notification
 
 class SimpleUserSerializer(serializers.ModelSerializer):
     """Simplified user serializer for use in posts/comments to avoid circular dependencies"""
@@ -120,3 +120,23 @@ class PostSerializer(serializers.ModelSerializer):
         data['comments'] = comments_data
         
         return data
+
+class FriendRequestSerializer(serializers.ModelSerializer):
+    sender = SimpleUserSerializer(read_only=True)
+    receiver = SimpleUserSerializer(read_only=True)
+    sender_id = serializers.IntegerField(write_only=True)
+    receiver_id = serializers.IntegerField(write_only=True)
+    
+    class Meta:
+        model = FriendRequest
+        fields = ['id', 'sender', 'receiver', 'sender_id', 'receiver_id', 'status', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+class NotificationSerializer(serializers.ModelSerializer):
+    from_user = SimpleUserSerializer(read_only=True)
+    friend_request = FriendRequestSerializer(read_only=True)
+    
+    class Meta:
+        model = Notification
+        fields = ['id', 'type', 'message', 'is_read', 'created_at', 'friend_request', 'post', 'from_user']
+        read_only_fields = ['id', 'created_at']
