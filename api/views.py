@@ -248,6 +248,19 @@ class PostViewSet(viewsets.ModelViewSet):
             return Response({'error': 'You can only update your own posts'}, status=403)
         serializer.save()
 
+    def destroy(self, request, *args, **kwargs):
+        """Custom destroy method to ensure users can only delete their own posts"""
+        post = self.get_object()
+        
+        # Check if user owns the post
+        if post.user != request.user:
+            return Response({'error': 'You can only delete your own posts'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Delete the post
+        post.delete()
+        
+        return Response({'message': 'Post deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=True, methods=['patch'])
     def upload_picture(self, request, pk=None):
         post = self.get_object()
