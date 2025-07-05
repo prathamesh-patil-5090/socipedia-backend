@@ -218,3 +218,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5174",
     "https://sociopedia.dev-sandbox.tech"
 ]
+
+# CORS settings for WebSocket
+CORS_ALLOW_ALL_ORIGINS = True  # For development only
+CORS_ALLOW_CREDENTIALS = True

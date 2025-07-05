@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Post, Comment, FriendRequest, Notification
+from .models import User, Post, Comment, FriendRequest, Notification, Conversation, Message, MessageReadStatus, Message, Conversation, MessageReadStatus
 
 class SimpleUserSerializer(serializers.ModelSerializer):
     """Simplified user serializer for use in posts/comments to avoid circular dependencies"""
@@ -140,3 +140,116 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = ['id', 'type', 'message', 'is_read', 'created_at', 'friend_request', 'post', 'from_user']
         read_only_fields = ['id', 'created_at']
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender = SimpleUserSerializer(read_only=True)
+    image_url = serializers.SerializerMethodField()
+    read_by = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Message
+        fields = [
+            'id', 'conversation', 'sender', 'content', 'image', 
+            'image_url', 'is_edited', 'is_deleted', 'created_at', 
+            'updated_at', 'read_by'
+        ]
+        read_only_fields = ['id', 'conversation', 'sender', 'created_at', 'updated_at', 'is_edited', 'is_deleted']
+    
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
+    
+    def get_read_by(self, obj):
+        """Get list of users who have read this message"""
+        read_statuses = obj.read_statuses.all()
+        return [
+            {
+                'user_id': status.user.id,
+                'username': status.user.username,
+                'read_at': status.read_at
+            }
+            for status in read_statuses
+        ]
+
+class ConversationSerializer(serializers.ModelSerializer):
+    participants = SimpleUserSerializer(many=True, read_only=True)
+    participant_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True
+    )
+    last_message = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    other_participant = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Conversation
+        fields = [
+            'id', 'participants', 'participant_ids', 'created_at', 
+            'updated_at', 'last_message', 'unread_count', 'other_participant'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_last_message(self, obj):
+        """Get the last message in the conversation"""
+        last_message = obj.messages.filter(is_deleted=False).last()
+        if last_message:
+            return MessageSerializer(last_message, context=self.context).data
+        return None
+    
+    def get_unread_count(self, obj):
+        """Get count of unread messages for the current user"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return 0
+        
+        # Count messages not read by current user
+        from .models import MessageReadStatus
+        read_message_ids = MessageReadStatus.objects.filter(
+            user=request.user,
+            message__conversation=obj
+        ).values_list('message_id', flat=True)
+        
+        unread_count = obj.messages.exclude(
+            id__in=read_message_ids
+        ).exclude(
+            sender=request.user  # Don't count own messages as unread
+        ).filter(
+            is_deleted=False
+        ).count()
+        
+        return unread_count
+    
+    def get_other_participant(self, obj):
+        """Get the other participant in a 2-person conversation"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        
+        other_participant = obj.get_other_participant(request.user)
+        if other_participant:
+            return SimpleUserSerializer(other_participant).data
+        return None
+    
+    def create(self, validated_data):
+        participant_ids = validated_data.pop('participant_ids')
+        conversation = Conversation.objects.create(**validated_data)
+        
+        # Add participants
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        participants = User.objects.filter(id__in=participant_ids)
+        conversation.participants.set(participants)
+        
+        return conversation
+
+class MessageReadStatusSerializer(serializers.ModelSerializer):
+    user = SimpleUserSerializer(read_only=True)
+    
+    class Meta:
+        model = MessageReadStatus
+        fields = ['id', 'message', 'user', 'read_at']
+        read_only_fields = ['id', 'read_at']

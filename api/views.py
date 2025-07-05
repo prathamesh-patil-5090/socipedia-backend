@@ -1,12 +1,12 @@
 from django.shortcuts import render
 from django.shortcuts import render
-from rest_framework import generics, status, viewsets
+from rest_framework import generics, status, viewsets, serializers
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from django.contrib.auth import get_user_model, authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import Post, Comment, User, FriendRequest, Notification
-from .serializers import UserSerializer, PostSerializer, CommentSerializer, FriendRequestSerializer, NotificationSerializer
+from .models import Post, Comment, User, FriendRequest, Notification, Conversation, Message, MessageReadStatus
+from .serializers import UserSerializer, PostSerializer, CommentSerializer, FriendRequestSerializer, NotificationSerializer, ConversationSerializer, MessageSerializer
 from .pagination import PostsPagination
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -22,6 +22,7 @@ import secrets
 import string
 from django.db.models import Q
 from .websocket_utils import send_notification_websocket
+from django.utils import timezone
 
 # Helper function to invalidate friend request notifications
 def invalidate_friend_request_notifications(friend_request_id):
@@ -50,6 +51,11 @@ def invalidate_friend_request_notifications(friend_request_id):
             
     except Exception as e:
         print(f"Error invalidating friend request notifications: {e}")
+
+
+def are_friends(user1, user2):
+    """Check if two users are friends"""
+    return user1.friends.filter(id=user2.id).exists()
 
 User = get_user_model()
 
@@ -1093,3 +1099,371 @@ def cancel_friend_request(request, request_id):
         return Response({'error': 'Friend request not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# DM/Messaging Views
+class ConversationViewSet(viewsets.ModelViewSet):
+    serializer_class = ConversationSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None  # Disable pagination
+    
+    def get_queryset(self):
+        return Conversation.objects.filter(participants=self.request.user).order_by('-updated_at')
+    
+    def create(self, request, *args, **kwargs):
+        """Create a new conversation with another user"""
+        other_user_id = request.data.get('other_user_id')
+        
+        if not other_user_id:
+            return Response({'error': 'other_user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            other_user = User.objects.get(id=other_user_id)
+            
+            # Check if users are friends
+            if not are_friends(request.user, other_user):
+                return Response({'error': 'You can only message friends'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Check if conversation already exists
+            existing_conversation = Conversation.objects.filter(
+                participants=request.user
+            ).filter(
+                participants=other_user
+            ).first()
+            
+            if existing_conversation:
+                serializer = self.get_serializer(existing_conversation)
+                return Response(serializer.data)
+            
+            # Create new conversation
+            conversation = Conversation.objects.create()
+            conversation.participants.set([request.user, other_user])
+            
+            serializer = self.get_serializer(conversation)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class MessageViewSet(viewsets.ModelViewSet):
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+    pagination_class = None  # Disable pagination for messages
+    
+    def get_queryset(self):
+        conversation_id = self.kwargs.get('conversation_pk')
+        
+        if not conversation_id:
+            return Message.objects.none()
+
+        # Ensure user is participant in conversation
+        if not self.request.user.conversations.filter(id=conversation_id).exists():
+            return Message.objects.none()
+            
+        return Message.objects.filter(
+            conversation_id=conversation_id, 
+            is_deleted=False
+        ).order_by('created_at')  # Ascending order - oldest first, newest last
+    
+    def perform_create(self, serializer):
+        conversation_id = self.kwargs.get('conversation_pk')
+        try:
+            print(f"[API] Creating message via REST: user={self.request.user.id}, conversation={conversation_id}")
+            
+            conversation = Conversation.objects.get(
+                id=conversation_id, 
+                participants=self.request.user
+            )
+            
+            print(f"[API] Found conversation: {conversation.id}, participants: {[p.id for p in conversation.participants.all()]}")
+            
+            # Check if users are friends
+            other_participant = conversation.get_other_participant(self.request.user)
+            print(f"[API] Other participant: {other_participant.id if other_participant else 'None'}")
+            
+            if not are_friends(self.request.user, other_participant):
+                print(f"[API] Error: Users are not friends: {self.request.user.id} and {other_participant.id if other_participant else 'None'}")
+                raise serializers.ValidationError("You can only message friends.")
+
+            message = serializer.save(sender=self.request.user, conversation=conversation)
+            print(f"[API] Message created successfully: {message.id}")
+            
+            # Update conversation timestamp
+            conversation.updated_at = timezone.now()
+            conversation.save()
+
+            # Broadcast message via WebSocket
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                # Serialize the message with proper context
+                message_serializer = MessageSerializer(message, context={'request': self.request})
+                message_data = message_serializer.data
+                
+                # Send to WebSocket group
+                async_to_sync(channel_layer.group_send)(
+                    f'conversation_{conversation_id}',
+                    {
+                        'type': 'new_message',
+                        'message': message_data
+                    }
+                )
+                print(f"[API] Message {message.id} broadcasted to WebSocket group conversation_{conversation_id}")
+
+        except Conversation.DoesNotExist:
+            print(f"[API] Error: Conversation {conversation_id} not found or user {self.request.user.id} is not a participant")
+            raise serializers.ValidationError("Conversation not found or you are not a participant.")
+        except Exception as e:
+            print(f"[API] Error in perform_create: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+    def create(self, request, *args, **kwargs):
+        """Create a new message in a conversation"""
+        content = request.data.get('content', '').strip()
+        image = request.FILES.get('image')
+
+        if not content and not image:
+            return Response({'error': 'Message must have content or an image.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return super().create(request, *args, **kwargs)
+    
+    def update(self, request, *args, **kwargs):
+        """Edit a message (only sender can edit)"""
+        message = self.get_object()
+        
+        if message.sender != request.user:
+            return Response({'error': 'You can only edit your own messages'}, status=status.HTTP_403_FORBIDDEN)
+        
+        content = request.data.get('content', '').strip()
+        if not content:
+            return Response({'error': 'Message content cannot be empty'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        message.content = content
+        message.is_edited = True
+        message.save()
+        
+        serializer = self.get_serializer(message)
+        
+        # Broadcast edit via WebSocket
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            conversation_id = self.kwargs.get('conversation_pk')
+            async_to_sync(channel_layer.group_send)(
+                f'conversation_{conversation_id}',
+                {
+                    'type': 'message_edited',
+                    'message': serializer.data
+                }
+            )
+            print(f"[API] Message {message.id} edit broadcasted to WebSocket group conversation_{conversation_id}")
+        
+        return Response(serializer.data)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Delete a message (only sender can delete)"""
+        message = self.get_object()
+        
+        if message.sender != request.user:
+            return Response({'error': 'You can only delete your own messages'}, status=status.HTTP_403_FORBIDDEN)
+        
+        message_id = message.id
+        message.is_deleted = True
+        message.save()
+        
+        # Broadcast delete via WebSocket
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            conversation_id = self.kwargs.get('conversation_pk')
+            async_to_sync(channel_layer.group_send)(
+                f'conversation_{conversation_id}',
+                {
+                    'type': 'message_deleted',
+                    'message_id': message_id
+                }
+            )
+            print(f"[API] Message {message_id} deletion broadcasted to WebSocket group conversation_{conversation_id}")
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mark_messages_as_read(request, conversation_pk):
+    """Mark messages in a conversation as read"""
+    try:
+        conversation = Conversation.objects.get(
+            id=conversation_pk,
+            participants=request.user
+        )
+        
+        # Get unread messages (excluding user's own messages)
+        unread_messages = conversation.messages.exclude(
+            sender=request.user
+        ).exclude(
+            read_statuses__user=request.user
+        ).filter(is_deleted=False)
+        
+        # Mark as read
+        for message in unread_messages:
+            MessageReadStatus.objects.get_or_create(
+                message=message,
+                user=request.user
+            )
+        
+        return Response({'success': True, 'marked_count': unread_messages.count()})
+        
+    except Conversation.DoesNotExist:
+        return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def debug_conversations(request):
+    """Debug endpoint to check conversations data"""
+    try:
+        # Get all conversations for user
+        conversations = Conversation.objects.filter(participants=request.user).order_by('-updated_at')
+        
+        debug_data = {
+            'user_id': request.user.id,
+            'user_name': f"{request.user.first_name} {request.user.last_name}",
+            'total_conversations': conversations.count(),
+            'conversations': []
+        }
+        
+        for conv in conversations:
+            participants = conv.participants.all()
+            messages = conv.messages.filter(is_deleted=False).order_by('-created_at')[:5]  # Last 5 messages
+            
+            conv_data = {
+                'id': conv.id,
+                'created_at': conv.created_at.isoformat(),
+                'updated_at': conv.updated_at.isoformat(),
+                'participants': [
+                    {
+                        'id': p.id,
+                        'name': f"{p.first_name} {p.last_name}",
+                        'email': p.email
+                    } for p in participants
+                ],
+                'message_count': messages.count(),
+                'recent_messages': [
+                    {
+                        'id': msg.id,
+                        'content': msg.content,
+                        'sender_id': msg.sender.id,
+                        'sender_name': f"{msg.sender.first_name} {msg.sender.last_name}",
+                        'created_at': msg.created_at.isoformat(),
+                        'has_image': bool(msg.image)
+                    } for msg in messages
+                ]
+            }
+            debug_data['conversations'].append(conv_data)
+        
+        return Response(debug_data)
+        
+    except Exception as e:
+        return Response({
+            'error': str(e),
+            'user_id': request.user.id if request.user else None
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def debug_friends(request):
+    """Debug endpoint to check friends data"""
+    try:
+        user = request.user
+        friends = user.friends.all()
+        
+        debug_data = {
+            'user_id': user.id,
+            'user_name': f"{user.first_name} {user.last_name}",
+            'friends_count': friends.count(),
+            'friends': [
+                {
+                    'id': friend.id,
+                    'name': f"{friend.first_name} {friend.last_name}",
+                    'email': friend.email
+                } for friend in friends
+            ]
+        }
+        
+        return Response(debug_data)
+        
+    except Exception as e:
+        return Response({
+            'error': str(e),
+            'user_id': request.user.id if request.user else None
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_test_conversation(request):
+    """Debug endpoint to create a test conversation with a friend"""
+    try:
+        friend_id = request.data.get('friend_id')
+        if not friend_id:
+            return Response({'error': 'friend_id required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            friend = User.objects.get(id=friend_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Friend not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if they are friends
+        if not are_friends(request.user, friend):
+            return Response({'error': 'You are not friends with this user'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check if conversation already exists
+        existing_conversation = Conversation.objects.filter(
+            participants=request.user
+        ).filter(
+            participants=friend
+        ).first()
+        
+        if existing_conversation:
+            return Response({
+                'message': 'Conversation already exists',
+                'conversation_id': existing_conversation.id
+            })
+        
+        # Create new conversation
+        conversation = Conversation.objects.create()
+        conversation.participants.set([request.user, friend])
+        
+        # Create a test message
+        test_message = Message.objects.create(
+            conversation=conversation,
+            sender=request.user,
+            content="Hello! This is a test message."
+        )
+        
+        conversation.updated_at = timezone.now()
+        conversation.save()
+        
+        return Response({
+            'message': 'Test conversation created successfully',
+            'conversation_id': conversation.id,
+            'test_message_id': test_message.id
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({
+            'error': str(e),
+            'user_id': request.user.id if request.user else None
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -75,6 +75,10 @@ def post_image_path(instance, filename):
     # Save in public/assets like Express backend  
     return f'{instance.user.username}_{filename}'
 
+def message_image_path(instance, filename):
+    # Save message images in public/assets like other images
+    return f'message_{instance.conversation.id}_{filename}'
+
 class User(AbstractUser):
     picture = models.ImageField(upload_to=user_profile_path, blank=True, null=True)
     picture_path = models.CharField(max_length=255, blank=True, default="")  # Keep for compatibility
@@ -191,3 +195,61 @@ class Notification(models.Model):
     
     def __str__(self):
         return f"Notification for {self.user.username}: {self.message}"
+
+class Conversation(models.Model):
+    participants = models.ManyToManyField(User, related_name='conversations')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+    
+    def __str__(self):
+        participant_names = ", ".join([user.username for user in self.participants.all()])
+        return f"Conversation between: {participant_names}"
+    
+    def get_other_participant(self, user):
+        """Get the other participant in a 2-person conversation"""
+        return self.participants.exclude(id=user.id).first()
+
+class Message(models.Model):
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
+    content = models.TextField(blank=True)  # Text content, can be empty if image-only
+    image = models.ImageField(upload_to=message_image_path, blank=True, null=True)
+    is_edited = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['created_at']
+    
+    def __str__(self):
+        content_preview = self.content[:50] if self.content else "[Image]" if self.image else "[Deleted]"
+        return f"Message from {self.sender.username}: {content_preview}"
+    
+    def save(self, *args, **kwargs):
+        # Compress message image before saving
+        if self.image and hasattr(self.image, 'file'):
+            # Check if this is a new upload
+            if not self.pk or (self.pk and self._state.adding):
+                print("Compressing message image...")
+                compressed_image = compress_image(self.image, quality=80, max_width=1200, max_height=1200)
+                if compressed_image:
+                    self.image = compressed_image
+        
+        # Update conversation's updated_at when message is saved
+        super().save(*args, **kwargs)
+        self.conversation.save()  # This will update the conversation's updated_at field
+
+class MessageReadStatus(models.Model):
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='read_statuses')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='message_read_statuses')
+    read_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('message', 'user')
+    
+    def __str__(self):
+        return f"{self.user.username} read message {self.message.id} at {self.read_at}"
