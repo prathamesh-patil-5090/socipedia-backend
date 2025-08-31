@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image API Test</title>
+</head>
+<body>
+    <h1>Testing Image API</h1>
+    
+    <h2>Direct Image Access (using token)</h2>
+    <img id="testImage" src="" alt="test image" style="max-width: 300px;" />
+    
+    <h2>Posts Data</h2>
+    <div id="postsData"></div>
+    
+    <script>
+        const API_URL = 'http://localhost:8000/api';
+        const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUxMjg5NTg1LCJpYXQiOjE3NTEyODU5ODUsImp0aSI6ImMzMmYzYmQxYTk4YzQ0OGNhNTU0MmJmOGUxY2FhZjYyIiwidXNlcl9pZCI6NH0.Iy5_1GrKXRTrj4TZQF20Cyyjdi8ZKvJWiHni-p4uSLI';
+        
+        // Test image loading
+        const testImg = document.getElementById('testImage');
+        testImg.src = `${API_URL}/images/Jaipatil5090_istockphoto-615422436-612x612.jpg`;
+        testImg.onerror = () => console.error('Failed to load test image');
+        testImg.onload = () => console.log('Test image loaded successfully');
+        
+        // Fetch posts data
+        fetch(`${API_URL}/posts/`, {
+            headers: {
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(posts => {
+            console.log('Posts data:', posts);
+            const postsDiv = document.getElementById('postsData');
+            posts.forEach((post, index) => {
+                if (post.picturePath) {
+                    const div = document.createElement('div');
+                    div.innerHTML = `
+                        <h3>Post ${index + 1}: ${post.description}</h3>
+                        <p>Picture Path: ${post.picturePath}</p>
+                        <p>Image URL: ${API_URL}/images/${post.picturePath.replace(/^\/assets\//, '')}</p>
+                        <img src="${API_URL}/images/${post.picturePath.replace(/^\/assets\//, '')}" 
+                             style="max-width: 200px;" 
+                             onerror="this.style.border='2px solid red'"
+                             onload="this.style.border='2px solid green'" />
+                    `;
+                    postsDiv.appendChild(div);
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching posts:', error);
+        });
+    </script>
+</body>
+</html>

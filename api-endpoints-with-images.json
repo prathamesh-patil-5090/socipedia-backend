@@ -1,0 +1,34 @@
+{
+  "Auth": {
+    "Register": "curl -X POST https://socipedia-backend-j6xs.onrender.com/api/register/ -H \"Content-Type: application/json\" -d '{\"username\": \"testuser\", \"password\": \"testpassword\", \"email\": \"test@example.com\", \"first_name\": \"Test\", \"last_name\": \"User\"}'",
+    "Register with Image": "curl -X POST https://socipedia-backend-j6xs.onrender.com/api/register/ -F \"username=testuser\" -F \"password=testpassword\" -F \"email=test@example.com\" -F \"first_name=Test\" -F \"last_name=User\" -F \"picture=@/path/to/your/image.jpg\"",
+    "Login": "curl -X POST https://socipedia-backend-j6xs.onrender.com/api/login/ -H \"Content-Type: application/json\" -d '{\"username\": \"testuser\", \"password\": \"testpassword\"}'",
+    "Token Refresh": "curl -X POST https://socipedia-backend-j6xs.onrender.com/api/token/refresh/ -H \"Content-Type: application/json\" -d '{\"refresh\": \"<your_refresh_token>\"}'"
+  },
+  "Users": {
+    "Get Users": "curl -X GET https://socipedia-backend-j6xs.onrender.com/api/users/ -H \"Authorization: Bearer <your_access_token>\"",
+    "Get User": "curl -X GET https://socipedia-backend-j6xs.onrender.com/api/users/1/ -H \"Authorization: Bearer <your_access_token>\"",
+    "Get User Comments": "curl -X GET https://socipedia-backend-j6xs.onrender.com/api/users/1/comments/ -H \"Authorization: Bearer <your_access_token>\"",
+    "Upload Profile Picture": "curl -X PATCH https://socipedia-backend-j6xs.onrender.com/api/users/1/upload_picture/ -H \"Authorization: Bearer <your_access_token>\" -F \"picture=@/path/to/your/image.jpg\"",
+    "Add Friend": "curl -X POST https://socipedia-backend-j6xs.onrender.com/api/users/1/add_friend/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\" -d '{\"friend_id\": 2}'",
+    "Remove Friend": "curl -X POST https://socipedia-backend-j6xs.onrender.com/api/users/1/remove_friend/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\" -d '{\"friend_id\": 2}'"
+  },
+  "Posts": {
+    "Get Posts": "curl -X GET https://socipedia-backend-j6xs.onrender.com/api/posts/ -H \"Authorization: Bearer <your_access_token>\"",
+    "Create Post": "curl -X POST https://socipedia-backend-j6xs.onrender.com/api/posts/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\" -d '{\"description\": \"This is a test post\"}'",
+    "Create Post with Image": "curl -X POST https://socipedia-backend-j6xs.onrender.com/api/posts/ -H \"Authorization: Bearer <your_access_token>\" -F \"description=This is a test post with image\" -F \"picture=@/path/to/your/image.jpg\"",
+    "Get Post": "curl -X GET https://socipedia-backend-j6xs.onrender.com/api/posts/1/ -H \"Authorization: Bearer <your_access_token>\"",
+    "Edit Post": "curl -X PATCH https://socipedia-backend-j6xs.onrender.com/api/posts/1/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\" -d '{\"description\": \"This is an updated post\"}'",
+    "Upload Post Picture": "curl -X PATCH https://socipedia-backend-j6xs.onrender.com/api/posts/1/upload_picture/ -H \"Authorization: Bearer <your_access_token>\" -F \"picture=@/path/to/your/image.jpg\"",
+    "Delete Post": "curl -X DELETE https://socipedia-backend-j6xs.onrender.com/api/posts/1/ -H \"Authorization: Bearer <your_access_token>\"",
+    "Like Post": "curl -X POST https://socipedia-backend-j6xs.onrender.com/api/posts/1/like/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\""
+  },
+  "Comments": {
+    "Get Comments": "curl -X GET https://socipedia-backend-j6xs.onrender.com/api/comments/ -H \"Authorization: Bearer <your_access_token>\"",
+    "Create Comment": "curl -X POST https://socipedia-backend-j6xs.onrender.com/api/comments/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\" -d '{\"post_id\": 1, \"comment\": \"This is a test comment\"}'",
+    "Get Comment": "curl -X GET https://socipedia-backend-j6xs.onrender.com/api/comments/1/ -H \"Authorization: Bearer <your_access_token>\"",
+    "Edit Comment": "curl -X PATCH https://socipedia-backend-j6xs.onrender.com/api/comments/1/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\" -d '{\"comment\": \"This is an updated comment\"}'",
+    "Delete Comment": "curl -X DELETE https://socipedia-backend-j6xs.onrender.com/api/comments/1/ -H \"Authorization: Bearer <your_access_token>\"",
+    "Like Comment": "curl -X POST https://socipedia-backend-j6xs.onrender.com/api/comments/1/like/ -H \"Content-Type: application/json\" -H \"Authorization: Bearer <your_access_token>\""
+  }
+}

@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+media/
+
+# Static files
+staticfiles/
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Machine Learning Models - Ignore all large model files
+**/model.safetensors
+**/pytorch_model.bin
+**/model.bin
+**/tf_model.h5
+**/flax_model.msgpack
+
+# Model artifacts and configuration files
+**/tokenizer_config.json
+**/special_tokens_map.json
+**/tokenizer.json
+**/vocab.txt
+**/config.json
+**/merges.txt
+**/added_tokens.json
+**/generation_config.json
+
+# Hugging Face cache and logs
+.cache/
+**/logs/
+**/runs/
+**/wandb/
+
+# Combined model directory (if you want to ignore the entire model folders)
+combined_model/combined_model/sentiment/
+combined_model/combined_model/toxic/
+
+# Other large files that might be in model directories
+**/*.pkl
+**/*.joblib
+**/*.h5
+**/*.hdf5
+**/*.tar.gz
+**/*.zip
+
+# Ignore __pycache__ and virtual environment
+__pycache__/
+venv/
+
+# Ignore any temp or backup files
+*.log
+*.tmp
+*.bak
